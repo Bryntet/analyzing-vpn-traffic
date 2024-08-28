@@ -1,16 +1,12 @@
+#![allow(clippy::upper_case_acronyms, dead_code)]
+
 mod parse_data;
 
+use crate::parse_data::get_data;
+use chrono::TimeDelta;
 use std::fmt::Debug;
-use crate::parse_data::{get_data, RawData};
-use std::io::BufReader;
-use std::fs::File;
-use std::fs;
-use serde::{Deserialize, Deserializer};
-use chrono::{NaiveDateTime, TimeDelta};
-use serde::de::Visitor;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
-
 
 trait ToPath {
     fn path(&self) -> &'static str;
@@ -18,17 +14,14 @@ trait ToPath {
 #[derive(Debug)]
 enum Encryption {
     VPN(VPN),
-    NonVPN
+    NonVPN,
 }
 #[derive(EnumIter)]
 enum EncryptionRepresentation {
     VPN,
-    NonVPN
+    NonVPN,
 }
-
-
-
-
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, EnumIter, Copy, Clone)]
 enum VPN {
     L2TP,
@@ -36,7 +29,7 @@ enum VPN {
     OpenVPN,
     PPTP,
     SSTP,
-    WireGuard
+    WireGuard,
 }
 impl ToPath for VPN {
     fn path(&self) -> &'static str {
@@ -52,14 +45,13 @@ impl ToPath for VPN {
     }
 }
 
-
 #[derive(Debug, EnumIter)]
 enum DataCategory {
     Mail,
     Meet,
     NonStreaming,
     SSH,
-    Streaming
+    Streaming,
 }
 
 impl ToPath for DataCategory {
@@ -70,34 +62,30 @@ impl ToPath for DataCategory {
             Meet => "meet.json",
             NonStreaming => "non_streaming.json",
             Streaming => "streaming.json",
-            SSH => "ssh.json"
+            SSH => "ssh.json",
         }
     }
 }
 
-
-
 #[derive(Debug)]
 enum PacketDirection {
     Forward,
-    Backward
+    Backward,
 }
 #[derive(Debug)]
 enum IpProtocol {
     Udp(Data<BasePacket>),
     Tcp(Data<TcpPacket>),
     Gre(Data<BasePacket>),
-    Icmp(Data<BasePacket>)
+    Icmp(Data<BasePacket>),
 }
-
 
 #[derive(Debug)]
 struct Data<IpProtocol: Debug> {
     port_destination: u16,
     port_source: u16,
-    packets: Vec<IpProtocol>
+    packets: Vec<IpProtocol>,
 }
-
 
 #[derive(Debug)]
 struct BasePacket {
@@ -106,7 +94,6 @@ struct BasePacket {
     ip_header_length: u8,
     packets: u8,
     packet_duration: TimeDelta,
-
 }
 #[derive(Debug)]
 struct TcpPacket {
@@ -121,17 +108,12 @@ struct TcpPacket {
 struct MetadataWrapper {
     encryption: Encryption,
     data_category: DataCategory,
-    all_packets: Vec<IpProtocol>
+    all_packets: Vec<IpProtocol>,
 }
-
-
-
-
 
 fn main() {
-   get_all_data();
+    get_all_data();
 }
-
 
 fn get_all_data() -> Vec<MetadataWrapper> {
     let mut all_data: Vec<MetadataWrapper> = vec![];
@@ -140,24 +122,25 @@ fn get_all_data() -> Vec<MetadataWrapper> {
             EncryptionRepresentation::VPN => {
                 for vpn_type in VPN::iter() {
                     for data_category in DataCategory::iter() {
-                        let path = format!("dataset/VPN/{}/{}",vpn_type.path(),data_category.path());
+                        let path =
+                            format!("dataset/VPN/{}/{}", vpn_type.path(), data_category.path());
                         let data = get_data(path);
                         all_data.push(MetadataWrapper {
                             encryption: Encryption::VPN(vpn_type),
                             data_category,
-                            all_packets: data
+                            all_packets: data,
                         })
                     }
                 }
             }
             EncryptionRepresentation::NonVPN => {
                 for data_category in DataCategory::iter() {
-                    let path = format!("dataset/Non VPN/{}",data_category.path());
+                    let path = format!("dataset/Non VPN/{}", data_category.path());
                     let data = get_data(path);
                     all_data.push(MetadataWrapper {
                         encryption: Encryption::NonVPN,
                         data_category,
-                        all_packets: data
+                        all_packets: data,
                     })
                 }
             }
