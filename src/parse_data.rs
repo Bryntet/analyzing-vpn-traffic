@@ -1,6 +1,5 @@
 use crate::{BasePacket, Data, PacketDirection, TcpPacket};
 use chrono::NaiveDateTime;
-use itertools::Itertools;
 use serde::Deserialize;
 use std::fs;
 use std::io::BufReader;
@@ -100,9 +99,9 @@ fn generate_packets(raw_packets: &[Packet]) -> Vec<BasePacket> {
 fn generate_packet(packet: &Packet) -> BasePacket {
     let bytes: i32 = packet.bytes.parse().unwrap();
     let packet_direction = if bytes.is_negative() {
-        PacketDirection::Backward
+        PacketDirection::Incoming
     } else {
-        PacketDirection::Forward
+        PacketDirection::Outgoing
     };
     let ip_header_length = packet
         .ip_header_length

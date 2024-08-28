@@ -14,7 +14,6 @@ use strum_macros::EnumIter;
 trait ToPath {
     fn path(&self) -> &'static str;
 }
-#[derive(Debug)]
 enum Encryption {
     VPN(VPN),
     NonVPN,
@@ -25,7 +24,7 @@ enum EncryptionRepresentation {
     NonVPN,
 }
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug, EnumIter, Copy, Clone)]
+#[derive(EnumIter, Copy, Clone)]
 enum VPN {
     L2TP,
     L2TPIP,
@@ -48,7 +47,7 @@ impl ToPath for VPN {
     }
 }
 
-#[derive(Debug, EnumIter)]
+#[derive(EnumIter)]
 enum DataCategory {
     Mail,
     Meet,
@@ -70,12 +69,10 @@ impl ToPath for DataCategory {
     }
 }
 
-#[derive(Debug)]
 enum PacketDirection {
-    Forward,
-    Backward,
+    Outgoing,
+    Incoming,
 }
-#[derive(Debug)]
 enum IpProtocol {
     Udp(Data<BasePacket>),
     Tcp(Data<TcpPacket>),
@@ -83,14 +80,12 @@ enum IpProtocol {
     Icmp(Data<BasePacket>),
 }
 
-#[derive(Debug)]
 struct Data<IpProtocol: Debug> {
     port_destination: u16,
     port_source: u16,
     packets: Vec<IpProtocol>,
 }
 
-#[derive(Debug)]
 struct BasePacket {
     bytes: u32,
     direction: PacketDirection,
@@ -98,7 +93,6 @@ struct BasePacket {
     packets: u8,
     packet_duration: TimeDelta,
 }
-#[derive(Debug)]
 struct TcpPacket {
     base: BasePacket,
     tcp_header_len: u16,
@@ -118,12 +112,11 @@ fn main() {
     let time = std::time::Instant::now();
     get_all_data();
     println!("Time passed: {}s", (std::time::Instant::now() - time).as_secs());
-    println!("RAM usage now at: {} GB", get_memory_usage()  / (1024^4));
 }
 
 fn get_all_data() -> Vec<MetadataWrapper> {
     let mut all_data: Mutex<Vec<MetadataWrapper>> = Mutex::new(vec![]);
-
+    
     EncryptionRepresentation::iter().par_bridge().for_each(|encryption_type|{
         match encryption_type {
             EncryptionRepresentation::VPN => {
