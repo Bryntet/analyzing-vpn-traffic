@@ -104,7 +104,7 @@ fn generate_packets(raw_packets: &[Packet]) -> Vec<BasePacket> {
 }
 
 fn generate_packet(packet: &Packet) -> BasePacket {
-    let bytes: i16 = packet.bytes.parse().unwrap();
+    let bytes: i32 = packet.bytes.parse().unwrap();
     let packet_direction = if bytes.is_negative() {
         PacketDirection::Backward
     } else {

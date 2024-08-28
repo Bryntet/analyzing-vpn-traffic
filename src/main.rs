@@ -101,7 +101,7 @@ struct Data<IpProtocol: Debug> {
 
 #[derive(Debug)]
 struct BasePacket {
-    bytes: u16,
+    bytes: u32,
     direction: PacketDirection,
     ip_header_length: u8,
     packets: u8,
@@ -129,7 +129,7 @@ struct MetadataWrapper {
 
 
 fn main() {
-   get_all_data(); 
+   get_all_data();
 }
 
 
