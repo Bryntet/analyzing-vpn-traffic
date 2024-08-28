@@ -1,9 +1,10 @@
-use crate::{BasePacket, Data, PacketDirection, TcpPacket};
+use crate::categories;
+use crate::categories::PacketDirection;
+use crate::data_structure::{BasePacket, Data, TcpPacket};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 use std::fs;
 use std::io::BufReader;
-use rayon::prelude::*;
 
 #[derive(Deserialize, Debug)]
 pub struct RawData {
@@ -60,7 +61,7 @@ enum IpProtocol {
     Icmp,
 }
 
-impl From<RawData> for crate::IpProtocol {
+impl From<RawData> for categories::IpProtocol {
     fn from(raw: RawData) -> Self {
         match raw.ip_protocol {
             IpProtocol::Tcp => {
@@ -69,7 +70,7 @@ impl From<RawData> for crate::IpProtocol {
                     port_source: raw.port_source,
                     packets: generate_tcp_packets(raw.packets),
                 };
-                crate::IpProtocol::Tcp(data)
+                categories::IpProtocol::Tcp(data)
             }
             IpProtocol::Icmp | IpProtocol::Gre | IpProtocol::Udp => {
                 let data = Data {
@@ -78,9 +79,9 @@ impl From<RawData> for crate::IpProtocol {
                     packets: generate_packets(&raw.packets),
                 };
                 match raw.ip_protocol {
-                    IpProtocol::Icmp => crate::IpProtocol::Icmp(data),
-                    IpProtocol::Gre => crate::IpProtocol::Gre(data),
-                    IpProtocol::Udp => crate::IpProtocol::Udp(data),
+                    IpProtocol::Icmp => categories::IpProtocol::Icmp(data),
+                    IpProtocol::Gre => categories::IpProtocol::Gre(data),
+                    IpProtocol::Udp => categories::IpProtocol::Udp(data),
                     IpProtocol::Tcp => unreachable!(),
                 }
             }
@@ -156,12 +157,12 @@ fn generate_tcp_packets(raw_packets: Vec<Packet>) -> Vec<TcpPacket> {
         .collect::<Vec<_>>()
 }
 
-pub fn get_data(folder: String) -> Vec<crate::IpProtocol> {
+pub fn get_data(folder: String) -> Vec<categories::IpProtocol> {
     let file = fs::File::open(folder).unwrap();
     let buf = BufReader::new(file);
     let raw_data: Vec<RawData> = serde_json::from_reader(buf).unwrap();
     raw_data
         .into_iter()
-        .map(crate::IpProtocol::from)
+        .map(categories::IpProtocol::from)
         .collect::<Vec<_>>()
 }
