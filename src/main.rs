@@ -80,7 +80,7 @@ enum IpProtocol {
     Icmp(Data<BasePacket>),
 }
 
-struct Data<IpProtocol: Debug> {
+struct Data<IpProtocol> {
     port_destination: u16,
     port_source: u16,
     packets: Vec<IpProtocol>,
@@ -101,7 +101,6 @@ struct TcpPacket {
     tcp_sequence_number: u32,
 }
 
-#[derive(Debug)]
 struct MetadataWrapper {
     encryption: Encryption,
     data_category: DataCategory,
