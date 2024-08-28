@@ -4,6 +4,7 @@ use itertools::Itertools;
 use serde::Deserialize;
 use std::fs;
 use std::io::BufReader;
+use rayon::prelude::*;
 
 #[derive(Deserialize, Debug)]
 pub struct RawData {
@@ -93,7 +94,7 @@ fn generate_packets(raw_packets: &[Packet]) -> Vec<BasePacket> {
         .iter()
         .filter(|packet| packet.ip_header_length.is_some())
         .map(generate_packet)
-        .collect_vec()
+        .collect::<Vec<_>>()
 }
 
 fn generate_packet(packet: &Packet) -> BasePacket {
@@ -153,16 +154,15 @@ fn generate_tcp_packets(raw_packets: Vec<Packet>) -> Vec<TcpPacket> {
                     .unwrap(),
             }
         })
-        .collect_vec()
+        .collect::<Vec<_>>()
 }
 
 pub fn get_data(folder: String) -> Vec<crate::IpProtocol> {
-    dbg!(&folder);
     let file = fs::File::open(folder).unwrap();
     let buf = BufReader::new(file);
     let raw_data: Vec<RawData> = serde_json::from_reader(buf).unwrap();
     raw_data
         .into_iter()
         .map(crate::IpProtocol::from)
-        .collect_vec()
+        .collect::<Vec<_>>()
 }

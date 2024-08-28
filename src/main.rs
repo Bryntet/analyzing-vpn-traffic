@@ -5,6 +5,9 @@ mod parse_data;
 use crate::parse_data::get_data;
 use chrono::TimeDelta;
 use std::fmt::Debug;
+use std::sync::Mutex;
+use psutil::process::Process;
+use rayon::prelude::*;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -112,39 +115,51 @@ struct MetadataWrapper {
 }
 
 fn main() {
+    let time = std::time::Instant::now();
     get_all_data();
+    println!("Time passed: {}s", (std::time::Instant::now() - time).as_secs());
+    println!("RAM usage now at: {} GB", get_memory_usage()  / (1024^4));
 }
 
 fn get_all_data() -> Vec<MetadataWrapper> {
-    let mut all_data: Vec<MetadataWrapper> = vec![];
-    for encryption_type in EncryptionRepresentation::iter() {
+    let mut all_data: Mutex<Vec<MetadataWrapper>> = Mutex::new(vec![]);
+
+    EncryptionRepresentation::iter().par_bridge().for_each(|encryption_type|{
         match encryption_type {
             EncryptionRepresentation::VPN => {
-                for vpn_type in VPN::iter() {
-                    for data_category in DataCategory::iter() {
+                VPN::iter().par_bridge().for_each(|vpn_type|{
+                    DataCategory::iter().par_bridge().for_each( |data_category|{
                         let path =
                             format!("dataset/VPN/{}/{}", vpn_type.path(), data_category.path());
-                        let data = get_data(path);
-                        all_data.push(MetadataWrapper {
+                        let metadata = MetadataWrapper {
                             encryption: Encryption::VPN(vpn_type),
                             data_category,
-                            all_packets: data,
-                        })
-                    }
-                }
+                            all_packets: get_data(path)
+                        };
+                        all_data.lock().unwrap().push(metadata)
+                    })
+                })
             }
             EncryptionRepresentation::NonVPN => {
-                for data_category in DataCategory::iter() {
+                DataCategory::iter().par_bridge().for_each(|data_category| {
                     let path = format!("dataset/Non VPN/{}", data_category.path());
-                    let data = get_data(path);
-                    all_data.push(MetadataWrapper {
+                    let metadata = MetadataWrapper {
                         encryption: Encryption::NonVPN,
                         data_category,
-                        all_packets: data,
-                    })
-                }
+                        all_packets: get_data(path),
+                    };
+                    all_data.lock().unwrap().push(metadata)
+                })
             }
         }
-    }
-    all_data
+    });
+    all_data.into_inner().unwrap()
+}
+
+
+fn get_memory_usage() -> u64 {
+    let current_pid = std::process::id();
+    let process = Process::new(current_pid).unwrap();
+    let memory_info = process.memory_info().unwrap();
+    memory_info.rss()
 }
