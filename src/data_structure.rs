@@ -7,30 +7,30 @@ use rayon::prelude::*;
 use std::sync::Mutex;
 use strum::IntoEnumIterator;
 pub struct Data<IpProtocol> {
-    pub(crate) port_destination: u16,
-    pub(crate) port_source: u16,
-    pub(crate) packets: Vec<IpProtocol>,
+    pub port_destination: u16,
+    pub port_source: u16,
+    pub packets: Vec<IpProtocol>,
 }
 
 pub struct BasePacket {
-    pub(crate) bytes: u32,
-    pub(crate) direction: PacketDirection,
-    pub(crate) ip_header_length: u8,
-    pub(crate) packets: u8,
-    pub(crate) packet_duration: TimeDelta,
+    pub bytes: u32,
+    pub direction: PacketDirection,
+    pub ip_header_length: u8,
+    pub packets: u8,
+    pub packet_duration: TimeDelta,
 }
 pub struct TcpPacket {
-    pub(crate) base: BasePacket,
-    pub(crate) tcp_header_len: u16,
-    pub(crate) tcp_flags: u8,
-    pub(crate) tcp_acknowledgment_number: u32,
-    pub(crate) tcp_sequence_number: u32,
+    pub base: BasePacket,
+    pub tcp_header_len: u16,
+    pub tcp_flags: u8,
+    pub tcp_acknowledgment_number: u32,
+    pub tcp_sequence_number: u32,
 }
 
 pub struct MetadataWrapper {
-    pub(crate) encryption: Encryption,
-    pub(crate) data_category: DataCategory,
-    pub(crate) all_packets: Vec<IpProtocol>,
+    pub encryption: Encryption,
+    pub data_category: DataCategory,
+    pub all_packets: Vec<IpProtocol>,
 }
 pub fn get_all_data() -> Vec<MetadataWrapper> {
     let all_data: Mutex<Vec<MetadataWrapper>> = Mutex::new(vec![]);
