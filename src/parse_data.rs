@@ -124,6 +124,7 @@ fn generate_packet(packet: &Packet) -> BasePacket {
 
 fn generate_tcp_packets(raw_packets: Vec<Packet>) -> Vec<TcpPacket> {
     raw_packets.into_iter()
+        .filter(|packet|packet.ip_header_length.is_some())
         .map(|packet|{
             let base_packet = generate_packet(&packet);
             TcpPacket {
@@ -136,8 +137,9 @@ fn generate_tcp_packets(raw_packets: Vec<Packet>) -> Vec<TcpPacket> {
         }).collect_vec()
 }
 
-pub fn get_data(folder: &'static str) -> Vec<crate::IpProtocol> {
+pub fn get_data(folder: String) -> Vec<crate::IpProtocol> {
 
+    dbg!(&folder);
     let file = fs::File::open(folder).unwrap();
     let mut buf = BufReader::new(file);
     let raw_data: Vec<RawData> = serde_json::from_reader(buf).unwrap();

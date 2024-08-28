@@ -8,12 +8,28 @@ use std::fs;
 use serde::{Deserialize, Deserializer};
 use chrono::{NaiveDateTime, TimeDelta};
 use serde::de::Visitor;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+
+
+trait ToPath {
+    fn path(&self) -> &'static str;
+}
 #[derive(Debug)]
 enum Encryption {
     VPN(VPN),
     NonVPN
 }
-#[derive(Debug)]
+#[derive(EnumIter)]
+enum EncryptionRepresentation {
+    VPN,
+    NonVPN
+}
+
+
+
+
+#[derive(Debug, EnumIter, Copy, Clone)]
 enum VPN {
     L2TP,
     L2TPIP,
@@ -22,7 +38,22 @@ enum VPN {
     SSTP,
     WireGuard
 }
-#[derive(Debug)]
+impl ToPath for VPN {
+    fn path(&self) -> &'static str {
+        use VPN::*;
+        match self {
+            L2TP => "L2TP",
+            L2TPIP => "L2TP IPsec",
+            OpenVPN => "OpenVPN",
+            PPTP => "PPTP",
+            SSTP => "SSTP",
+            WireGuard => "WireGuard",
+        }
+    }
+}
+
+
+#[derive(Debug, EnumIter)]
 enum DataCategory {
     Mail,
     Meet,
@@ -30,6 +61,22 @@ enum DataCategory {
     SSH,
     Streaming
 }
+
+impl ToPath for DataCategory {
+    fn path(&self) -> &'static str {
+        use DataCategory::*;
+        match self {
+            Mail => "mail.json",
+            Meet => "meet.json",
+            NonStreaming => "non_streaming.json",
+            Streaming => "streaming.json",
+            SSH => "ssh.json"
+        }
+    }
+}
+
+
+
 #[derive(Debug)]
 enum PacketDirection {
     Forward,
@@ -59,7 +106,7 @@ struct BasePacket {
     ip_header_length: u8,
     packets: u8,
     packet_duration: TimeDelta,
-    
+
 }
 #[derive(Debug)]
 struct TcpPacket {
@@ -70,9 +117,51 @@ struct TcpPacket {
     tcp_sequence_number: u32,
 }
 
+#[derive(Debug)]
+struct MetadataWrapper {
+    encryption: Encryption,
+    data_category: DataCategory,
+    all_packets: Vec<IpProtocol>
+}
+
+
 
 
 
 fn main() {
-    dbg!(get_data("dataset/Non VPN/ssh.json"));
+   get_all_data(); 
+}
+
+
+fn get_all_data() -> Vec<MetadataWrapper> {
+    let mut all_data: Vec<MetadataWrapper> = vec![];
+    for encryption_type in EncryptionRepresentation::iter() {
+        match encryption_type {
+            EncryptionRepresentation::VPN => {
+                for vpn_type in VPN::iter() {
+                    for data_category in DataCategory::iter() {
+                        let path = format!("dataset/VPN/{}/{}",vpn_type.path(),data_category.path());
+                        let data = get_data(path);
+                        all_data.push(MetadataWrapper {
+                            encryption: Encryption::VPN(vpn_type),
+                            data_category,
+                            all_packets: data
+                        })
+                    }
+                }
+            }
+            EncryptionRepresentation::NonVPN => {
+                for data_category in DataCategory::iter() {
+                    let path = format!("dataset/Non VPN/{}",data_category.path());
+                    let data = get_data(path);
+                    all_data.push(MetadataWrapper {
+                        encryption: Encryption::NonVPN,
+                        data_category,
+                        all_packets: data
+                    })
+                }
+            }
+        }
+    }
+    all_data
 }
