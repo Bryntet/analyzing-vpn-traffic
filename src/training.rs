@@ -22,10 +22,10 @@ static ARTIFACT_DIR: &str = "network-analysis-model";
 
 #[derive(Config)]
 pub struct ExpConfig {
-    #[config(default = 10000)]
+    #[config(default = 100)]
     pub num_epochs: usize,
 
-    #[config(default = 2)]
+    #[config(default = 16)]
     pub num_workers: usize,
 
     #[config(default = 42)]
@@ -56,13 +56,13 @@ pub fn run<B: AutodiffBackend>(device: B::Device) {
     
     // Shuffle the dataset with a defined seed such that train and test sets have no overlap
     // when splitting by indexes
-    let dataset : ShuffledData = ShuffledDataset::with_seed(NetworkDataset(data.clone()), 42);
+    let dataset : ShuffledData = ShuffledDataset::with_seed(NetworkDataset(data.clone()), config.seed);
 
     // The dataset from HuggingFace has only train split, so we manually split the train dataset into train
     // and test in a 80-20 ratio
 
     let train = PartialDataset::new(dataset, 0, len * 8 / 10);
-    let dataset = ShuffledDataset::with_seed(NetworkDataset(data),42);
+    let dataset = ShuffledDataset::with_seed(NetworkDataset(data),config.seed);
     let test = PartialDataset::new(dataset, len * 8 / 10, len);
     
 
