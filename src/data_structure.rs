@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use crate::categories::{
     DataCategory, Encryption, EncryptionRepresentation, IpProtocol, PacketDirection, ToPath, VPN,
 };
@@ -6,12 +7,13 @@ use chrono::TimeDelta;
 use rayon::prelude::*;
 use std::sync::Mutex;
 use strum::IntoEnumIterator;
-pub struct Data<IpProtocol> {
+#[derive(Clone, Debug)]
+pub struct Data<IpProtocol: Clone + Debug> {
     pub port_destination: u16,
     pub port_source: u16,
     pub packets: Vec<IpProtocol>,
 }
-
+#[derive(Clone, Debug)]
 pub struct BasePacket {
     pub bytes: u32,
     pub direction: PacketDirection,
@@ -19,6 +21,7 @@ pub struct BasePacket {
     pub packets: u8,
     pub packet_duration: TimeDelta,
 }
+#[derive(Clone, Debug)]
 pub struct TcpPacket {
     pub base: BasePacket,
     pub tcp_header_len: u16,
@@ -26,7 +29,7 @@ pub struct TcpPacket {
     pub tcp_acknowledgment_number: u32,
     pub tcp_sequence_number: u32,
 }
-
+#[derive(Clone, Debug)]
 pub struct MetadataWrapper {
     pub encryption: Encryption,
     pub data_category: DataCategory,
@@ -34,7 +37,6 @@ pub struct MetadataWrapper {
 }
 pub fn get_all_data() -> Vec<MetadataWrapper> {
     let all_data: Mutex<Vec<MetadataWrapper>> = Mutex::new(vec![]);
-
     EncryptionRepresentation::iter().par_bridge().for_each(
         |encryption_type| match encryption_type {
             EncryptionRepresentation::VPN => VPN::iter().par_bridge().for_each(|vpn_type| {
@@ -63,3 +65,15 @@ pub fn get_all_data() -> Vec<MetadataWrapper> {
     );
     all_data.into_inner().unwrap()
 }
+
+impl Data<TcpPacket> {
+    pub fn to_base_packet(&self) -> Data<&BasePacket> {
+        Data {
+            port_source: self.port_source,
+            port_destination: self.port_source,
+            packets: self.packets.iter().map(|packet| &packet.base).collect(),
+        }
+    }
+}
+
+

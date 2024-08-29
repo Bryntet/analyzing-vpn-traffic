@@ -1,6 +1,6 @@
 use crate::data_structure::{BasePacket, Data, TcpPacket};
 use strum_macros::EnumIter;
-
+#[derive(Clone, Debug, PartialEq)]
 pub enum Encryption {
     VPN(VPN),
     NonVPN,
@@ -11,7 +11,7 @@ pub enum EncryptionRepresentation {
     NonVPN,
 }
 #[allow(clippy::enum_variant_names)]
-#[derive(EnumIter, Copy, Clone)]
+#[derive(EnumIter, Copy, Clone, Debug, PartialEq)]
 pub enum VPN {
     L2TP,
     L2TPIP,
@@ -20,7 +20,7 @@ pub enum VPN {
     SSTP,
     WireGuard,
 }
-#[derive(EnumIter)]
+#[derive(EnumIter, Copy, Clone, Debug)]
 pub enum DataCategory {
     Mail,
     Meet,
@@ -28,16 +28,19 @@ pub enum DataCategory {
     SSH,
     Streaming,
 }
+#[derive(Clone, Debug)]
 pub enum PacketDirection {
     Outgoing,
     Incoming,
 }
+#[derive(Clone, Debug)]
 pub enum IpProtocol {
     Udp(Data<BasePacket>),
     Tcp(Data<TcpPacket>),
     Gre(Data<BasePacket>),
     Icmp(Data<BasePacket>),
 }
+
 pub trait ToPath {
     fn path(&self) -> &'static str;
 }
