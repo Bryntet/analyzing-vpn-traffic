@@ -1,4 +1,4 @@
-use crate::categories::{IpProtocol, PacketDirection};
+use crate::categories::{Encryption, IpProtocol, PacketDirection};
 use crate::data_structure::{BasePacket, MetadataWrapper};
 use burn::{
     data::{
@@ -11,22 +11,40 @@ use burn::{
     prelude::*,
 };
 use itertools::Itertools;
+use rayon::prelude::*;
+use std::sync::Arc;
 
-pub struct NetworkDataset(pub Vec<MetadataWrapper>);
+#[derive(Clone)]
+pub struct NetworkDataset(pub Arc<Vec<MetadataWrapper>>);
 impl Dataset<MetadataWrapper> for NetworkDataset {
     fn get(&self, index: usize) -> Option<MetadataWrapper> {
         Some(self.0.get(index)?.to_owned())
     }
 
     fn len(&self) -> usize {
-        self.0.iter().map(|data|data.all_packets.len()).sum()
+        self.0.iter().map(|data| data.all_packets.len()).sum()
     }
 }
 
-pub type ShuffledData = ShuffledDataset<NetworkDataset, MetadataWrapper>;
-pub type PartialData = PartialDataset<ShuffledData, MetadataWrapper>;
+impl NetworkDataset {
+    fn new(data: Vec<MetadataWrapper>) -> Self {
+        Self(Arc::new(data))
+    }
+    pub fn split(self, train_ratio: f32, seed: &mut rand::rngs::StdRng) -> (Self, Self) {
+        let total_len = self.len();
+        let train_len = (total_len as f32 * train_ratio) as usize;
 
+        // Shuffle the dataset
+        let shuffled = ShuffledDataset::new(self, seed);
 
+        let train_data: Vec<_> = (0..train_len).filter_map(|i| shuffled.get(i)).collect();
+        let valid_data: Vec<_> = (train_len..total_len).filter_map(|i| shuffled.get(i)).collect();
+        (
+            NetworkDataset (train_data.into()),
+            NetworkDataset (valid_data.into()),
+        )
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct NetworkTrafficBatcher<B: Backend> {
@@ -35,8 +53,8 @@ pub struct NetworkTrafficBatcher<B: Backend> {
 
 #[derive(Clone, Debug)]
 pub struct NetworkTrafficBatch<B: Backend> {
-    pub inputs: Tensor<B, 2>,
-    pub targets: Tensor<B, 1>,
+    pub inputs: Tensor<B, 1>,
+    pub targets: Tensor<B, 1, Int>,
 }
 
 impl<B: Backend> NetworkTrafficBatcher<B> {
@@ -53,31 +71,29 @@ impl<B: Backend> NetworkTrafficBatcher<B> {
 
 impl<B: Backend> Batcher<MetadataWrapper, NetworkTrafficBatch<B>> for NetworkTrafficBatcher<B> {
     fn batch(&self, items: Vec<MetadataWrapper>) -> NetworkTrafficBatch<B> {
-        let mut inputs: Vec<Tensor<B, 2>> = Vec::new();
-
-        let mut targets = Vec::new();
+        let mut inputs: Vec<Tensor<B, 1>> = Vec::new();
 
         for item in items.iter() {
             for data in &item.all_packets {
                 if let IpProtocol::Tcp(data) = data {
                     inputs.extend(
                         data.packets
-                            .iter()
+                            .par_iter()
                             .map(|packet| {
                                 let mut inputs = get_base_float(
                                     data.port_source,
                                     data.port_destination,
                                     &packet.base,
                                 );
-                                inputs.extend([
+                                /*inputs.extend([
                                     packet.tcp_flags as f32,
                                     packet.tcp_header_len as f32,
                                     packet.tcp_acknowledgment_number as f32,
                                     packet.tcp_header_len as f32,
-                                ]);
-                                Tensor::<B, 2>::from_floats(&*inputs, &self.device)
+                                ]);*/
+                                Tensor::<B, 1>::from_floats(&*inputs, &self.device)
                             })
-                            .collect_vec(),
+                            .collect::<Vec<_>>(),
                     )
                 } else {
                     let data = match data {
@@ -86,17 +102,18 @@ impl<B: Backend> Batcher<MetadataWrapper, NetworkTrafficBatch<B>> for NetworkTra
                         }
                         IpProtocol::Tcp(_) => unreachable!(),
                     };
-                    inputs.extend(data.packets.iter().map(|packet| {
-                        Tensor::<B, 2>::from_floats(
-                            &*get_base_float(data.port_source, data.port_destination, packet),
-                            &self.device,
-                        )
-                    }))
+                    let things = data
+                        .packets
+                        .par_iter()
+                        .map(|packet| {
+                            Tensor::<B, 1>::from_floats(
+                                &*get_base_float(data.port_source, data.port_destination, packet),
+                                &self.device,
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    inputs.extend(things);
                 }
-                targets.push(Tensor::<B, 1>::from_floats(
-                    [item.data_category as u8 as f32],
-                    &self.device,
-                ))
             }
         }
 
@@ -105,13 +122,20 @@ impl<B: Backend> Batcher<MetadataWrapper, NetworkTrafficBatch<B>> for NetworkTra
 
         let targets = items
             .iter()
-            .map(|item| {
-                Tensor::<B, 1>::from_floats([(item.data_category as u8) as f32], &self.device)
+            .flat_map(|item| {
+                item.all_packets.iter().map(|_| {
+                    Tensor::<B, 1, Int>::from_ints(
+                        [item.data_category as u8,match item.encryption {
+                            Encryption::VPN(vpn) => vpn as u8 + 1,
+                            Encryption::NonVPN => 0
+                        }],
+                        &self.device,
+                    )
+                }).collect::<Vec<_>>()
             })
             .collect();
 
         let targets = Tensor::cat(targets, 0);
-        let targets = self.min_max_norm(targets);
         NetworkTrafficBatch { inputs, targets }
     }
 }

@@ -1,6 +1,9 @@
+use burn::prelude::Backend;
+use burn::tensor::TensorKind;
 use crate::data_structure::{BasePacket, Data, TcpPacket};
-use strum_macros::EnumIter;
-#[derive(Clone, Debug, PartialEq)]
+use strum_macros::{Display, EnumIter};
+use rayon::prelude::*;
+#[derive(Clone, Debug, PartialEq, Hash, Eq, Display)]
 pub enum Encryption {
     VPN(VPN),
     NonVPN,
@@ -11,7 +14,7 @@ pub enum EncryptionRepresentation {
     NonVPN,
 }
 #[allow(clippy::enum_variant_names)]
-#[derive(EnumIter, Copy, Clone, Debug, PartialEq)]
+#[derive(EnumIter, Copy, Clone, Debug, PartialEq, Hash, Eq, Display)]
 pub enum VPN {
     L2TP,
     L2TPIP,
@@ -20,7 +23,7 @@ pub enum VPN {
     SSTP,
     WireGuard,
 }
-#[derive(EnumIter, Copy, Clone, Debug)]
+#[derive(EnumIter, Copy, Clone, Debug, Hash, PartialEq, Eq, Display)]
 pub enum DataCategory {
     Mail,
     Meet,
@@ -28,6 +31,8 @@ pub enum DataCategory {
     SSH,
     Streaming,
 }
+
+
 #[derive(Clone, Debug)]
 pub enum PacketDirection {
     Outgoing,
@@ -39,6 +44,16 @@ pub enum IpProtocol {
     Tcp(Data<TcpPacket>),
     Gre(Data<BasePacket>),
     Icmp(Data<BasePacket>),
+}
+impl<'a> From<&'a IpProtocol> for Vec<&'a BasePacket> {
+    fn from(packet: &'a IpProtocol) -> Self {
+        match packet {
+            IpProtocol::Udp(data) | IpProtocol::Gre(data) | IpProtocol::Icmp(data) => {
+                data.packets.par_iter().collect::<Vec<_>>()
+            }
+            IpProtocol::Tcp(data) => data.packets.par_iter().map(|packet|&packet.base).collect::<Vec<_>>(),
+        }
+    }
 }
 
 pub trait ToPath {

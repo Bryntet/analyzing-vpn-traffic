@@ -4,12 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-burn = { version = "0.14.0", features = ["train", "wgpu", ] }
+burn = { version = "*", features = ["train", "wgpu","cuda-jit", ] }
 chrono = {version = "0.4.38", features = ["serde"]}
 itertools = "0.13.0"
 psutil = "3.3.0"
+rand = "0.8.5"
 rayon = "1.10.0"
 serde = { version = "1.0.209", features = ["derive",] }
 serde_json = "1.0.127"
 strum = "0.26.3"
 strum_macros = "0.26.4"
+log = "0.4.22"
+gtk = { package = "gtk4", version = "*" }
+plotters-cairo = "0.7.0"
+
+
+
+[dependencies.plotters]
+version = "0.3.6"
+

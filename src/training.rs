@@ -1,8 +1,11 @@
+use crate::burn_dataset::{NetworkDataset, NetworkTrafficBatcher};
+use crate::categories::{DataCategory, Encryption, VPN};
+use crate::data_structure::{get_all_data, get_some_data};
+use burn::data::dataset::transform::{PartialDataset, ShuffledDataset};
 use burn::{
     data::{dataloader::DataLoaderBuilder, dataset::Dataset},
     optim::SgdConfig,
     prelude::*,
-
     record::{CompactRecorder, NoStdTrainingRecorder},
     tensor::backend::AutodiffBackend,
     train::{
@@ -11,21 +14,22 @@ use burn::{
         LearnerBuilder, MetricEarlyStoppingStrategy, StoppingCondition,
     },
 };
-use burn::data::dataset::transform::{PartialDataset, ShuffledDataset};
 use rayon::prelude::*;
-use crate::burn_dataset::{NetworkDataset, NetworkTrafficBatcher, ShuffledData};
-use crate::categories::Encryption;
-use crate::data_structure::get_all_data;
-use crate::model::RegressionModelConfig;
+use std::sync::Mutex;
+use burn::train::metric::AccuracyMetric;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use strum::IntoEnumIterator;
+use crate::model::Model;
 
 static ARTIFACT_DIR: &str = "network-analysis-model";
 
 #[derive(Config)]
 pub struct ExpConfig {
-    #[config(default = 100)]
+    #[config(default = 500)]
     pub num_epochs: usize,
 
-    #[config(default = 16)]
+    #[config(default = 1)]
     pub num_workers: usize,
 
     #[config(default = 42)]
@@ -33,90 +37,67 @@ pub struct ExpConfig {
 
     pub optimizer: SgdConfig,
 
-    #[config(default = 10)]
+    #[config(default = 1225)]
     pub input_feature_len: usize,
 
-    #[config(default = 442)]
-    pub dataset_size: usize,
+    #[config(default = 1.0e-4)]
+    pub learning_rate: f64,
+
+    #[config(default = 0.9)]
+    pub train_ratio: f32
 }
 
-pub fn run<B: AutodiffBackend>(device: B::Device) {
-    // Config
+
+pub fn train<B: AutodiffBackend>(device: B::Device) {
     let optimizer = SgdConfig::new();
     let config = ExpConfig::new(optimizer);
-    let model = RegressionModelConfig::new(config.input_feature_len).init(&device);
-    B::seed(config.seed);
+    let model = Model::new(&device,1225,1,5);
 
-    // Define train/test datasets and dataloaders
-
-    let data: Vec<_> = get_all_data().into_par_iter().filter(|data|data.encryption!= Encryption::NonVPN).collect();
-    
-    let len = data.len();
-
-    
-    // Shuffle the dataset with a defined seed such that train and test sets have no overlap
-    // when splitting by indexes
-    let dataset : ShuffledData = ShuffledDataset::with_seed(NetworkDataset(data.clone()), config.seed);
-
-    // The dataset from HuggingFace has only train split, so we manually split the train dataset into train
-    // and test in a 80-20 ratio
-
-    let train = PartialDataset::new(dataset, 0, len * 8 / 10);
-    let dataset = ShuffledDataset::with_seed(NetworkDataset(data),config.seed);
-    let test = PartialDataset::new(dataset, len * 8 / 10, len);
-    
+    // Set the random seed
+    let data = Mutex::new(vec![]);
+    DataCategory::iter().par_bridge().for_each(|category| {
+        let metadata = get_some_data(Encryption::VPN(VPN::L2TP), category);
+        data.lock().unwrap().push(metadata);
+    });
+    let mut rng = StdRng::seed_from_u64(config.seed);
 
 
+    let data = NetworkDataset(data.into_inner().unwrap().into());
+    let (train,learn) = data.split(config.train_ratio, &mut rng);
+    // Initialize model, optimizer, and data loaders
+    let optimizer = config.optimizer.init();
 
     let batcher_train = NetworkTrafficBatcher::<B>::new(device.clone());
-
-    let batcher_test = NetworkTrafficBatcher::<B::InnerBackend>::new(device.clone());
-
-
-
-    // Since dataset size is small, we do full batch gradient descent and set batch size equivalent to size of dataset
+    let batcher_valid = NetworkTrafficBatcher::<B::InnerBackend>::new(device.clone());
 
     let dataloader_train = DataLoaderBuilder::new(batcher_train)
-        .batch_size(train.len())
+        .batch_size(64)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
         .build(train);
 
-    let dataloader_test = DataLoaderBuilder::new(batcher_test)
-        .batch_size(test.len())
+    let dataloader_valid = DataLoaderBuilder::new(batcher_valid)
+        .batch_size(64)
         .shuffle(config.seed)
         .num_workers(config.num_workers)
-        .build(test);
+        .build(learn);
 
-
-    // Model
-    let learner = LearnerBuilder::new(ARTIFACT_DIR)
+    // Set up the learner
+    let learner = LearnerBuilder::new("network-analysis-model")
+        .metric_train_numeric(AccuracyMetric::new())
+        .metric_valid_numeric(AccuracyMetric::new())
         .metric_train_numeric(LossMetric::new())
         .metric_valid_numeric(LossMetric::new())
         .with_file_checkpointer(CompactRecorder::new())
-        .early_stopping(MetricEarlyStoppingStrategy::new::<LossMetric<B>>(
-            Aggregate::Mean,
-            Direction::Lowest,
-            Split::Valid,
-            StoppingCondition::NoImprovementSince { n_epochs: 1 },
-        ))
         .devices(vec![device.clone()])
         .num_epochs(config.num_epochs)
-        .summary()
-        .build(model, config.optimizer.init(), 5e-3);
+        .build(model, optimizer, config.learning_rate);
 
-    let model_trained = learner.fit(dataloader_train, dataloader_test);
+    // Run the training
+    let trained_model = learner.fit(dataloader_train, dataloader_valid);
 
-    dbg!("here");
-    
-    config
-        .save(format!("{ARTIFACT_DIR}/config.json").as_str())
+    // Save the trained model
+    trained_model
+        .save_file("network-analysis-model/model".to_string(), &CompactRecorder::new())
         .unwrap();
-
-    model_trained
-        .save_file(
-            format!("{ARTIFACT_DIR}/model"),
-            &NoStdTrainingRecorder::new(),
-        )
-        .expect("Failed to save trained model");
 }

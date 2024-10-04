@@ -1,10 +1,10 @@
-use std::fmt::Debug;
 use crate::categories::{
     DataCategory, Encryption, EncryptionRepresentation, IpProtocol, PacketDirection, ToPath, VPN,
 };
 use crate::parse_data::get_data;
 use chrono::TimeDelta;
 use rayon::prelude::*;
+use std::fmt::Debug;
 use std::sync::Mutex;
 use strum::IntoEnumIterator;
 #[derive(Clone, Debug)]
@@ -66,6 +66,20 @@ pub fn get_all_data() -> Vec<MetadataWrapper> {
     all_data.into_inner().unwrap()
 }
 
+pub fn get_some_data(encryption: Encryption, data_category: DataCategory) -> MetadataWrapper {
+    let path = match encryption {
+        Encryption::VPN(vpn) => {
+            format!("dataset/VPN/{}/{}", vpn.path(), data_category.path())
+        }
+        Encryption::NonVPN => format!("dataset/Non VPN/{}", data_category.path()),
+    };
+    MetadataWrapper {
+        encryption: Encryption::NonVPN,
+        data_category,
+        all_packets: get_data(path),
+    }
+}
+
 impl Data<TcpPacket> {
     pub fn to_base_packet(&self) -> Data<&BasePacket> {
         Data {
@@ -75,5 +89,3 @@ impl Data<TcpPacket> {
         }
     }
 }
-
-

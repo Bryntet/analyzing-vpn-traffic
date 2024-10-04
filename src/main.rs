@@ -3,21 +3,24 @@
 mod burn_dataset;
 mod categories;
 pub mod data_structure;
+mod model;
 mod parse_data;
 mod training;
-mod model;
+mod visualise;
 
 use burn::backend::{
     wgpu::{Wgpu, WgpuDevice},
     Autodiff,
 };
+use crate::categories::{Encryption, VPN};
 
 pub fn run() {
     let device = WgpuDevice::BestAvailable;
+
     
-    
-    training::run::<Autodiff<Wgpu>>(device);
+    training::train::<Autodiff<Wgpu>>(device);
 }
 fn main() {
-    run();
+    let hash = visualise::collect_data_specific_encryption(Encryption::VPN(VPN::L2TP));
+    visualise::plot(hash).unwrap();
 }
