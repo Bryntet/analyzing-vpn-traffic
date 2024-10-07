@@ -1,8 +1,8 @@
+use crate::data_structure::{BasePacket, Data, TcpPacket};
 use burn::prelude::Backend;
 use burn::tensor::TensorKind;
-use crate::data_structure::{BasePacket, Data, TcpPacket};
-use strum_macros::{Display, EnumIter};
 use rayon::prelude::*;
+use strum_macros::{Display, EnumIter};
 #[derive(Clone, Debug, PartialEq, Hash, Eq, Display)]
 pub enum Encryption {
     VPN(VPN),
@@ -32,7 +32,6 @@ pub enum DataCategory {
     Streaming,
 }
 
-
 #[derive(Clone, Debug)]
 pub enum PacketDirection {
     Outgoing,
@@ -51,7 +50,11 @@ impl<'a> From<&'a IpProtocol> for Vec<&'a BasePacket> {
             IpProtocol::Udp(data) | IpProtocol::Gre(data) | IpProtocol::Icmp(data) => {
                 data.packets.par_iter().collect::<Vec<_>>()
             }
-            IpProtocol::Tcp(data) => data.packets.par_iter().map(|packet|&packet.base).collect::<Vec<_>>(),
+            IpProtocol::Tcp(data) => data
+                .packets
+                .par_iter()
+                .map(|packet| &packet.base)
+                .collect::<Vec<_>>(),
         }
     }
 }

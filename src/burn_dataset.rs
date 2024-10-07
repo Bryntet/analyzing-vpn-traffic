@@ -38,10 +38,12 @@ impl NetworkDataset {
         let shuffled = ShuffledDataset::new(self, seed);
 
         let train_data: Vec<_> = (0..train_len).filter_map(|i| shuffled.get(i)).collect();
-        let valid_data: Vec<_> = (train_len..total_len).filter_map(|i| shuffled.get(i)).collect();
+        let valid_data: Vec<_> = (train_len..total_len)
+            .filter_map(|i| shuffled.get(i))
+            .collect();
         (
-            NetworkDataset (train_data.into()),
-            NetworkDataset (valid_data.into()),
+            NetworkDataset(train_data.into()),
+            NetworkDataset(valid_data.into()),
         )
     }
 }
@@ -123,15 +125,21 @@ impl<B: Backend> Batcher<MetadataWrapper, NetworkTrafficBatch<B>> for NetworkTra
         let targets = items
             .iter()
             .flat_map(|item| {
-                item.all_packets.iter().map(|_| {
-                    Tensor::<B, 1, Int>::from_ints(
-                        [item.data_category as u8,match item.encryption {
-                            Encryption::VPN(vpn) => vpn as u8 + 1,
-                            Encryption::NonVPN => 0
-                        }],
-                        &self.device,
-                    )
-                }).collect::<Vec<_>>()
+                item.all_packets
+                    .iter()
+                    .map(|_| {
+                        Tensor::<B, 1, Int>::from_ints(
+                            [
+                                item.data_category as u8,
+                                match item.encryption {
+                                    Encryption::VPN(vpn) => vpn as u8 + 1,
+                                    Encryption::NonVPN => 0,
+                                },
+                            ],
+                            &self.device,
+                        )
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect();
 

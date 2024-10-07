@@ -1,7 +1,9 @@
 use crate::burn_dataset::{NetworkDataset, NetworkTrafficBatcher};
 use crate::categories::{DataCategory, Encryption, VPN};
 use crate::data_structure::{get_all_data, get_some_data};
+use crate::model::Model;
 use burn::data::dataset::transform::{PartialDataset, ShuffledDataset};
+use burn::train::metric::AccuracyMetric;
 use burn::{
     data::{dataloader::DataLoaderBuilder, dataset::Dataset},
     optim::SgdConfig,
@@ -14,13 +16,11 @@ use burn::{
         LearnerBuilder, MetricEarlyStoppingStrategy, StoppingCondition,
     },
 };
-use rayon::prelude::*;
-use std::sync::Mutex;
-use burn::train::metric::AccuracyMetric;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use rayon::prelude::*;
+use std::sync::Mutex;
 use strum::IntoEnumIterator;
-use crate::model::Model;
 
 static ARTIFACT_DIR: &str = "network-analysis-model";
 
@@ -44,14 +44,13 @@ pub struct ExpConfig {
     pub learning_rate: f64,
 
     #[config(default = 0.9)]
-    pub train_ratio: f32
+    pub train_ratio: f32,
 }
-
 
 pub fn train<B: AutodiffBackend>(device: B::Device) {
     let optimizer = SgdConfig::new();
     let config = ExpConfig::new(optimizer);
-    let model = Model::new(&device,1225,1,5);
+    let model = Model::new(&device, 1225, 1, 5);
 
     // Set the random seed
     let data = Mutex::new(vec![]);
@@ -61,9 +60,8 @@ pub fn train<B: AutodiffBackend>(device: B::Device) {
     });
     let mut rng = StdRng::seed_from_u64(config.seed);
 
-
     let data = NetworkDataset(data.into_inner().unwrap().into());
-    let (train,learn) = data.split(config.train_ratio, &mut rng);
+    let (train, learn) = data.split(config.train_ratio, &mut rng);
     // Initialize model, optimizer, and data loaders
     let optimizer = config.optimizer.init();
 
@@ -98,6 +96,9 @@ pub fn train<B: AutodiffBackend>(device: B::Device) {
 
     // Save the trained model
     trained_model
-        .save_file("network-analysis-model/model".to_string(), &CompactRecorder::new())
+        .save_file(
+            "network-analysis-model/model".to_string(),
+            &CompactRecorder::new(),
+        )
         .unwrap();
 }
